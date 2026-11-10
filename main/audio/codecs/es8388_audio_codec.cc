@@ -113,9 +113,11 @@ void Es8388AudioCodec::CreateDuplexChannels(gpio_num_t mclk, gpio_num_t bclk, gp
             .ws_width = I2S_DATA_BIT_WIDTH_16BIT,
             .ws_pol = false,
             .bit_shift = true,
+#if SOC_I2S_HW_VERSION_2
             .left_align = true,
             .big_endian = false,
             .bit_order_lsb = false
+#endif
         },
         .gpio_cfg = {
             .mclk = mclk,
