@@ -1,5 +1,6 @@
 #include "wifi_board.h"
 #include "audio/codecs/es8388_audio_codec.h"
+#include "audio/codecs/ac101_audio_codec.h"
 #include "display/display.h"
 #include "application.h"
 #include "button.h"
@@ -16,6 +17,7 @@ class AudioKitBoard : public WifiBoard {
 private:
     i2c_master_bus_handle_t i2c_bus_ = nullptr;
     uint8_t codec_addr_ = ES8388_CODEC_DEFAULT_ADDR;
+    bool is_ac101_ = false;
     gpio_num_t sda_pin_ = AUDIO_CODEC_I2C_SDA_PIN;
     gpio_num_t scl_pin_ = AUDIO_CODEC_I2C_SCL_PIN;
 
@@ -50,6 +52,9 @@ private:
                 found++;
                 if (detected_addr == 0) {
                     detected_addr = (uint8_t)(addr << 1);
+                    if (addr == 0x1A) {
+                        is_ac101_ = true;
+                    }
                 }
             }
         }
@@ -58,7 +63,8 @@ private:
             sda_pin_ = sda;
             scl_pin_ = scl;
             codec_addr_ = detected_addr;
-            ESP_LOGI(TAG, "Selected I2C codec address: 0x%02X on SDA=%d, SCL=%d", codec_addr_, (int)sda, (int)scl);
+            ESP_LOGI(TAG, "Selected I2C codec address: 0x%02X (%s) on SDA=%d, SCL=%d", 
+                     codec_addr_, is_ac101_ ? "AC101" : "ES8388", (int)sda, (int)scl);
             return true;
         }
 
@@ -151,20 +157,41 @@ public:
     }
 
     virtual AudioCodec* GetAudioCodec() override {
-        static Es8388AudioCodec audio_codec(
-            i2c_bus_, 
-            I2C_NUM_0, 
-            AUDIO_INPUT_SAMPLE_RATE, 
-            AUDIO_OUTPUT_SAMPLE_RATE,
-            AUDIO_I2S_GPIO_MCLK, 
-            AUDIO_I2S_GPIO_BCLK, 
-            AUDIO_I2S_GPIO_WS, 
-            AUDIO_I2S_GPIO_DOUT, 
-            AUDIO_I2S_GPIO_DIN,
-            AUDIO_CODEC_PA_PIN, 
-            codec_addr_
-        );
-        return &audio_codec;
+        static AudioCodec* audio_codec = nullptr;
+        if (audio_codec == nullptr) {
+            if (is_ac101_) {
+                ESP_LOGI(TAG, "Board has AC101 audio codec, instantiating Ac101AudioCodec...");
+                audio_codec = new Ac101AudioCodec(
+                    i2c_bus_, 
+                    I2C_NUM_0, 
+                    AUDIO_INPUT_SAMPLE_RATE, 
+                    AUDIO_OUTPUT_SAMPLE_RATE,
+                    AUDIO_I2S_GPIO_MCLK, 
+                    AUDIO_I2S_GPIO_BCLK, 
+                    AUDIO_I2S_GPIO_WS, 
+                    AUDIO_I2S_GPIO_DOUT, 
+                    AUDIO_I2S_GPIO_DIN,
+                    AUDIO_CODEC_PA_PIN, 
+                    0x1A
+                );
+            } else {
+                ESP_LOGI(TAG, "Board has ES8388 audio codec (addr 0x%02X), instantiating Es8388AudioCodec...", codec_addr_);
+                audio_codec = new Es8388AudioCodec(
+                    i2c_bus_, 
+                    I2C_NUM_0, 
+                    AUDIO_INPUT_SAMPLE_RATE, 
+                    AUDIO_OUTPUT_SAMPLE_RATE,
+                    AUDIO_I2S_GPIO_MCLK, 
+                    AUDIO_I2S_GPIO_BCLK, 
+                    AUDIO_I2S_GPIO_WS, 
+                    AUDIO_I2S_GPIO_DOUT, 
+                    AUDIO_I2S_GPIO_DIN,
+                    AUDIO_CODEC_PA_PIN, 
+                    codec_addr_
+                );
+            }
+        }
+        return audio_codec;
     }
 
     virtual Display* GetDisplay() override {
