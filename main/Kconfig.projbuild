@@ -136,6 +136,9 @@ choice BOARD_TYPE
         Select the physical board hardware implementation.
         The OTA board type and firmware variant name are configured separately.
 
+    config BOARD_TYPE_ESP32_AUDIO_KIT
+        bool "Ai-Thinker ESP32-A1S Audio Kit (ES8388)"
+        depends on IDF_TARGET_ESP32
     config BOARD_TYPE_ATK_DNESP32S3
         bool "Alientek ATK-DNESP32S3 Development Board (正点原子)"
         depends on IDF_TARGET_ESP32S3
@@ -165,9 +168,6 @@ choice BOARD_TYPE
         depends on IDF_TARGET_ESP32
     config BOARD_TYPE_BREAD_COMPACT_ESP32_LCD
         bool "Bread Compact ESP32 DevKit + LCD (面包板)"
-        depends on IDF_TARGET_ESP32
-    config BOARD_TYPE_ESP32_AUDIO_KIT
-        bool "Ai-Thinker ESP32-A1S Audio Kit (ES8388)"
         depends on IDF_TARGET_ESP32
     config BOARD_TYPE_BREAD_COMPACT_ML307
         bool "Bread Compact ML307/EC801E 4G (面包板)"

@@ -22,10 +22,10 @@
 #define AUDIO_CODEC_PA_PIN       GPIO_NUM_21
 
 // Buttons (Active LOW with internal pull-up)
-#define BOOT_BUTTON_GPIO         GPIO_NUM_0    // BOOT pin
 #define TALK_BUTTON_GPIO         GPIO_NUM_19   // KEY 3 (Push to Talk / Toggle Chat)
-#define VOL_DOWN_BUTTON_GPIO     GPIO_NUM_18   // KEY 5
-#define VOL_UP_BUTTON_GPIO       GPIO_NUM_5    // KEY 6
+#define WIFI_RESET_BUTTON_GPIO   GPIO_NUM_23   // KEY 4 (Enter Wi-Fi Config Mode)
+#define VOL_DOWN_BUTTON_GPIO     GPIO_NUM_18   // KEY 5 (Volume -)
+#define VOL_UP_BUTTON_GPIO       GPIO_NUM_5    // KEY 6 (Volume +)
 
 // Onboard Status LED
 #define BUILTIN_LED_GPIO         GPIO_NUM_22   // LED 4 Green

@@ -14,8 +14,8 @@
 class AudioKitBoard : public WifiBoard {
 private:
     i2c_master_bus_handle_t i2c_bus_ = nullptr;
-    Button boot_button_;
     Button talk_button_;
+    Button wifi_button_;
     Button vol_up_button_;
     Button vol_down_button_;
 
@@ -45,13 +45,9 @@ private:
             app.ToggleChatState();
         });
 
-        boot_button_.OnClick([this]() {
-            auto& app = Application::GetInstance();
-            if (app.GetDeviceState() == kDeviceStateStarting) {
-                EnterWifiConfigMode();
-                return;
-            }
-            app.ToggleChatState();
+        wifi_button_.OnClick([this]() {
+            ESP_LOGI(TAG, "KEY 4 pressed: Entering Wi-Fi Config Mode");
+            EnterWifiConfigMode();
         });
 
         vol_up_button_.OnClick([this]() {
@@ -74,8 +70,8 @@ private:
 public:
     AudioKitBoard() : 
         WifiBoard(),
-        boot_button_(BOOT_BUTTON_GPIO),
         talk_button_(TALK_BUTTON_GPIO),
+        wifi_button_(WIFI_RESET_BUTTON_GPIO),
         vol_up_button_(VOL_UP_BUTTON_GPIO),
         vol_down_button_(VOL_DOWN_BUTTON_GPIO) {
         

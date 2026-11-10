@@ -1136,7 +1136,6 @@ file(GLOB COMMON_SOUNDS ${CMAKE_CURRENT_SOURCE_DIR}/assets/common/*.ogg)
 # If target chip is ESP32, exclude specific files to avoid build errors
 if(CONFIG_IDF_TARGET_ESP32)
     list(REMOVE_ITEM SOURCES "audio/codecs/box_audio_codec.cc"
-                             "audio/codecs/es8388_audio_codec.cc"
                              "audio/codecs/es8389_audio_codec.cc"
                              "led/gpio_led.cc"
                              "display/lvgl_display/jpg/image_to_jpeg.cpp"
@@ -1145,6 +1144,9 @@ if(CONFIG_IDF_TARGET_ESP32)
                              "boards/common/ml307_board.cc"
                              "boards/common/dual_network_board.cc"
                              )
+    if(NOT CONFIG_BOARD_TYPE_ESP32_AUDIO_KIT)
+        list(REMOVE_ITEM SOURCES "audio/codecs/es8388_audio_codec.cc")
+    endif()
 endif()
 
 # Include EspVideo if target is ESP32S3 or ESP32P4
