@@ -44,28 +44,23 @@ private:
             return false;
         }
 
-        int found = 0;
-        uint8_t detected_addr = 0;
-        for (uint16_t addr = 0x01; addr < 0x7F; ++addr) {
-            if (i2c_master_probe(i2c_bus_, addr, 20) == ESP_OK) {
+        // Targeted probe for known codecs on ESP32-A1S:
+        // 0x1A: AC101
+        // 0x10 or 0x11: ES8388
+        const uint16_t candidate_addrs[] = { 0x1A, 0x10, 0x11 };
+        for (uint16_t addr : candidate_addrs) {
+            if (i2c_master_probe(i2c_bus_, addr, 50) == ESP_OK) {
                 ESP_LOGI(TAG, " -> Found I2C device at 7-bit: 0x%02X (8-bit: 0x%02X)", addr, addr << 1);
-                found++;
-                if (detected_addr == 0) {
-                    detected_addr = (uint8_t)(addr << 1);
-                    if (addr == 0x1A) {
-                        is_ac101_ = true;
-                    }
+                sda_pin_ = sda;
+                scl_pin_ = scl;
+                codec_addr_ = (uint8_t)(addr << 1);
+                if (addr == 0x1A) {
+                    is_ac101_ = true;
                 }
+                ESP_LOGI(TAG, "Selected I2C codec address: 0x%02X (%s) on SDA=%d, SCL=%d", 
+                         codec_addr_, is_ac101_ ? "AC101" : "ES8388", (int)sda, (int)scl);
+                return true;
             }
-        }
-
-        if (found > 0) {
-            sda_pin_ = sda;
-            scl_pin_ = scl;
-            codec_addr_ = detected_addr;
-            ESP_LOGI(TAG, "Selected I2C codec address: 0x%02X (%s) on SDA=%d, SCL=%d", 
-                     codec_addr_, is_ac101_ ? "AC101" : "ES8388", (int)sda, (int)scl);
-            return true;
         }
 
         i2c_del_master_bus(i2c_bus_);
@@ -160,22 +155,24 @@ public:
         static AudioCodec* audio_codec = nullptr;
         if (audio_codec == nullptr) {
             if (is_ac101_) {
-                ESP_LOGI(TAG, "Board has AC101 audio codec, instantiating Ac101AudioCodec...");
+                // AC101 pinout: WS is Pin 26, DOUT (DAC Data) is Pin 25
+                ESP_LOGI(TAG, "Board has AC101 audio codec (WS=26, DOUT=25), instantiating Ac101AudioCodec...");
                 audio_codec = new Ac101AudioCodec(
                     i2c_bus_, 
                     I2C_NUM_0, 
                     AUDIO_INPUT_SAMPLE_RATE, 
                     AUDIO_OUTPUT_SAMPLE_RATE,
-                    AUDIO_I2S_GPIO_MCLK, 
-                    AUDIO_I2S_GPIO_BCLK, 
-                    AUDIO_I2S_GPIO_WS, 
-                    AUDIO_I2S_GPIO_DOUT, 
-                    AUDIO_I2S_GPIO_DIN,
+                    GPIO_NUM_0,   // MCLK
+                    GPIO_NUM_27,  // BCLK
+                    GPIO_NUM_26,  // WS (Pin 26 for AC101)
+                    GPIO_NUM_25,  // DOUT (Pin 25 for AC101)
+                    GPIO_NUM_35,  // DIN
                     AUDIO_CODEC_PA_PIN, 
                     0x1A
                 );
             } else {
-                ESP_LOGI(TAG, "Board has ES8388 audio codec (addr 0x%02X), instantiating Es8388AudioCodec...", codec_addr_);
+                // ES8388 pinout: WS is Pin 25, DOUT (DAC Data) is Pin 26
+                ESP_LOGI(TAG, "Board has ES8388 audio codec (WS=25, DOUT=26, addr 0x%02X), instantiating Es8388AudioCodec...", codec_addr_);
                 audio_codec = new Es8388AudioCodec(
                     i2c_bus_, 
                     I2C_NUM_0, 
@@ -183,9 +180,9 @@ public:
                     AUDIO_OUTPUT_SAMPLE_RATE,
                     AUDIO_I2S_GPIO_MCLK, 
                     AUDIO_I2S_GPIO_BCLK, 
-                    AUDIO_I2S_GPIO_WS, 
-                    AUDIO_I2S_GPIO_DOUT, 
-                    AUDIO_I2S_GPIO_DIN,
+                    AUDIO_I2S_GPIO_WS,   // Pin 25 for ES8388
+                    AUDIO_I2S_GPIO_DOUT, // Pin 26 for ES8388
+                    AUDIO_I2S_GPIO_DIN, 
                     AUDIO_CODEC_PA_PIN, 
                     codec_addr_
                 );

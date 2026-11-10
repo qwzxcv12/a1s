@@ -60,8 +60,6 @@ Ac101AudioCodec::Ac101AudioCodec(void* i2c_master_handle, i2c_port_t i2c_port, i
     tx_buffer_.resize(AUDIO_CODEC_DMA_FRAME_NUM * 2);
     rx_buffer_.resize(AUDIO_CODEC_DMA_FRAME_NUM * 2);
 
-    CreateDuplexChannels(mclk, bclk, ws, dout, din);
-
     if (pa_pin_ != GPIO_NUM_NC) {
         gpio_config_t io_conf = {
             .pin_bit_mask = (1ULL << pa_pin_),
@@ -74,6 +72,11 @@ Ac101AudioCodec::Ac101AudioCodec(void* i2c_master_handle, i2c_port_t i2c_port, i
         gpio_set_level(pa_pin_, 0);
     }
 
+    // First start I2S channels to provide MCLK to AC101
+    CreateDuplexChannels(mclk, bclk, ws, dout, din);
+    vTaskDelay(pdMS_TO_TICKS(50));
+
+    // Register I2C device
     i2c_master_bus_handle_t bus = (i2c_master_bus_handle_t)i2c_master_handle;
     i2c_device_config_t dev_cfg = {
         .dev_addr_length = I2C_ADDR_BIT_LEN_7,
@@ -157,7 +160,8 @@ void Ac101AudioCodec::CreateDuplexChannels(gpio_num_t mclk, gpio_num_t bclk, gpi
     ESP_ERROR_CHECK(i2s_channel_init_std_mode(rx_handle_, &std_cfg));
     ESP_ERROR_CHECK(i2s_channel_enable(tx_handle_));
     ESP_ERROR_CHECK(i2s_channel_enable(rx_handle_));
-    ESP_LOGI(TAG, "Duplex channels created");
+    ESP_LOGI(TAG, "Duplex channels created: MCLK=%d, BCLK=%d, WS=%d, DOUT=%d, DIN=%d",
+             (int)mclk, (int)bclk, (int)ws, (int)dout, (int)din);
 }
 
 esp_err_t Ac101AudioCodec::WriteReg(uint8_t reg, uint16_t val) {
@@ -167,7 +171,7 @@ esp_err_t Ac101AudioCodec::WriteReg(uint8_t reg, uint16_t val) {
     buf[0] = reg;
     buf[1] = (uint8_t)((val >> 8) & 0xFF);
     buf[2] = (uint8_t)(val & 0xFF);
-    return i2c_master_transmit(i2c_dev_, buf, sizeof(buf), pdMS_TO_TICKS(100));
+    return i2c_master_transmit(i2c_dev_, buf, sizeof(buf), 1000);
 }
 
 uint16_t Ac101AudioCodec::ReadReg(uint8_t reg) {
@@ -175,7 +179,7 @@ uint16_t Ac101AudioCodec::ReadReg(uint8_t reg) {
     std::lock_guard<std::mutex> lock(i2c_mutex_);
     uint8_t reg_addr = reg;
     uint8_t data[2] = {0, 0};
-    esp_err_t err = i2c_master_transmit_receive(i2c_dev_, &reg_addr, 1, data, 2, pdMS_TO_TICKS(100));
+    esp_err_t err = i2c_master_transmit_receive(i2c_dev_, &reg_addr, 1, data, 2, 1000);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "ReadReg 0x%02X failed: %d", reg, err);
         return 0;
