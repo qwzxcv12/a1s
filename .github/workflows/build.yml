@@ -1,4 +1,4 @@
-name: Build ESP32 Firmware
+name: Build Xiaozhi ESP32 Firmware
 
 on:
   push:
@@ -7,16 +7,14 @@ on:
     branches: [ "main", "master" ]
 
 env:
-  # Bật ccache tích hợp sẵn trong ESP-IDF
   IDF_CCACHE_ENABLE: 1
-  # Đặt đường dẫn lưu ccache ngay trong thư mục workspace để actions/cache dễ quản lý
   CCACHE_DIR: ${{ github.workspace }}/.ccache
   CCACHE_MAXSIZE: 500M
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: espressif/idf:release-v5.3
+    container: espressif/idf:release-v6.1
 
     steps:
       - name: Checkout Code
@@ -29,18 +27,15 @@ jobs:
             .ccache
             managed_components
             ~/.cache/idf-component-manager
-          # Tạo key dựa trên hệ điều hành, target và sự thay đổi của sdkconfig / idf_component.yml
-          key: esp32s3-idf5.3-${{ runner.os }}-${{ hashFiles('sdkconfig*', '**/idf_component.yml', 'CMakeLists.txt') }}
+          key: xiaozhi-esp32-v6.1-${{ runner.os }}-${{ hashFiles('sdkconfig*', '**/config.json', 'CMakeLists.txt') }}
           restore-keys: |
-            esp32s3-idf5.3-${{ runner.os }}-
+            xiaozhi-esp32-v6.1-${{ runner.os }}-
 
       - name: Build Firmware
         shell: bash
         run: |
-          . $IDF_PATH/export.sh
-          # Truyền trực tiếp IDF_TARGET vào build để tránh lệnh set-target xóa sạch cache/sdkconfig
-          idf.py -DIDF_TARGET=esp32s3 build
-          # Hiển thị thống kê ccache để kiểm tra tỷ lệ cache hit trên log
+          source $IDF_PATH/export.sh
+          python scripts/build.py esp32-audio-kit
           ccache -s
 
       - name: Upload Firmware Artifacts
@@ -51,3 +46,4 @@ jobs:
             build/bootloader/bootloader.bin
             build/partition_table/partition-table.bin
             build/*.bin
+            build/merged-binary.bin
