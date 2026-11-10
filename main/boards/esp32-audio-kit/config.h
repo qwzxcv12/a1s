@@ -2,6 +2,7 @@
 #define _BOARD_CONFIG_H_
 
 #include <driver/gpio.h>
+#include <esp_codec_dev_defaults.h>
 
 #define AUDIO_INPUT_SAMPLE_RATE  16000
 #define AUDIO_OUTPUT_SAMPLE_RATE 16000
@@ -16,7 +17,7 @@
 // I2C Codec Control (ES8388)
 #define AUDIO_CODEC_I2C_SDA_PIN  GPIO_NUM_33
 #define AUDIO_CODEC_I2C_SCL_PIN  GPIO_NUM_32
-#define AUDIO_CODEC_ES8388_ADDR  0x10
+#define AUDIO_CODEC_ES8388_ADDR  ES8388_CODEC_DEFAULT_ADDR // 8-bit address 0x20
 
 // Speaker Power Amplifier Enable (NS4150)
 #define AUDIO_CODEC_PA_PIN       GPIO_NUM_21

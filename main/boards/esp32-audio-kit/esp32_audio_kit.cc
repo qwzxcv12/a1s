@@ -8,22 +8,28 @@
 
 #include <esp_log.h>
 #include <driver/i2c_master.h>
+#include <esp_codec_dev_defaults.h>
 
 #define TAG "AudioKitBoard"
 
 class AudioKitBoard : public WifiBoard {
 private:
     i2c_master_bus_handle_t i2c_bus_ = nullptr;
-    Button talk_button_;
-    Button wifi_button_;
-    Button vol_up_button_;
-    Button vol_down_button_;
+    uint8_t codec_addr_ = ES8388_CODEC_DEFAULT_ADDR;
+    gpio_num_t sda_pin_ = AUDIO_CODEC_I2C_SDA_PIN;
+    gpio_num_t scl_pin_ = AUDIO_CODEC_I2C_SCL_PIN;
 
-    void InitializeI2c() {
-        i2c_master_bus_config_t i2c_bus_cfg = {
+    Button* talk_button_ = nullptr;
+    Button* wifi_button_ = nullptr;
+    Button* vol_up_button_ = nullptr;
+    Button* vol_down_button_ = nullptr;
+
+    bool ProbeI2cBus(gpio_num_t sda, gpio_num_t scl) {
+        ESP_LOGI(TAG, "Probing I2C bus on SDA=%d, SCL=%d...", (int)sda, (int)scl);
+        i2c_master_bus_config_t bus_cfg = {
             .i2c_port = (i2c_port_t)I2C_NUM_0,
-            .sda_io_num = AUDIO_CODEC_I2C_SDA_PIN,
-            .scl_io_num = AUDIO_CODEC_I2C_SCL_PIN,
+            .sda_io_num = sda,
+            .scl_io_num = scl,
             .clk_source = I2C_CLK_SRC_DEFAULT,
             .glitch_ignore_cnt = 7,
             .intr_priority = 0,
@@ -32,11 +38,69 @@ private:
                 .enable_internal_pullup = 1,
             },
         };
-        ESP_ERROR_CHECK(i2c_new_master_bus(&i2c_bus_cfg, &i2c_bus_));
+        if (i2c_new_master_bus(&bus_cfg, &i2c_bus_) != ESP_OK) {
+            return false;
+        }
+
+        int found = 0;
+        uint8_t detected_addr = 0;
+        for (uint16_t addr = 0x01; addr < 0x7F; ++addr) {
+            if (i2c_master_probe(i2c_bus_, addr, 20) == ESP_OK) {
+                ESP_LOGI(TAG, " -> Found I2C device at 7-bit: 0x%02X (8-bit: 0x%02X)", addr, addr << 1);
+                found++;
+                if (detected_addr == 0) {
+                    detected_addr = (uint8_t)(addr << 1);
+                }
+            }
+        }
+
+        if (found > 0) {
+            sda_pin_ = sda;
+            scl_pin_ = scl;
+            codec_addr_ = detected_addr;
+            ESP_LOGI(TAG, "Selected I2C codec address: 0x%02X on SDA=%d, SCL=%d", codec_addr_, (int)sda, (int)scl);
+            return true;
+        }
+
+        i2c_del_master_bus(i2c_bus_);
+        i2c_bus_ = nullptr;
+        return false;
+    }
+
+    void InitializeI2c() {
+        // Try Pair 1: GPIO 33 (SDA), GPIO 32 (SCL) - ESP32-A1S v2.2 standard
+        if (ProbeI2cBus(GPIO_NUM_33, GPIO_NUM_32)) {
+            return;
+        }
+
+        // Try Pair 2: GPIO 18 (SDA), GPIO 23 (SCL) - ESP32-A1S v2.3 alternative
+        if (ProbeI2cBus(GPIO_NUM_18, GPIO_NUM_23)) {
+            return;
+        }
+
+        ESP_LOGE(TAG, "Could not auto-detect codec on I2C! Falling back to SDA=33, SCL=32, addr=0x20");
+        codec_addr_ = ES8388_CODEC_DEFAULT_ADDR;
+        sda_pin_ = GPIO_NUM_33;
+        scl_pin_ = GPIO_NUM_32;
+
+        i2c_master_bus_config_t bus_cfg = {
+            .i2c_port = (i2c_port_t)I2C_NUM_0,
+            .sda_io_num = sda_pin_,
+            .scl_io_num = scl_pin_,
+            .clk_source = I2C_CLK_SRC_DEFAULT,
+            .glitch_ignore_cnt = 7,
+            .intr_priority = 0,
+            .trans_queue_depth = 0,
+            .flags = {
+                .enable_internal_pullup = 1,
+            },
+        };
+        i2c_new_master_bus(&bus_cfg, &i2c_bus_);
     }
 
     void InitializeButtons() {
-        talk_button_.OnClick([this]() {
+        talk_button_ = new Button(TALK_BUTTON_GPIO);
+        talk_button_->OnClick([this]() {
             auto& app = Application::GetInstance();
             if (app.GetDeviceState() == kDeviceStateStarting) {
                 EnterWifiConfigMode();
@@ -45,12 +109,16 @@ private:
             app.ToggleChatState();
         });
 
-        wifi_button_.OnClick([this]() {
-            ESP_LOGI(TAG, "KEY 4 pressed: Entering Wi-Fi Config Mode");
-            EnterWifiConfigMode();
-        });
+        if (scl_pin_ != WIFI_RESET_BUTTON_GPIO && sda_pin_ != WIFI_RESET_BUTTON_GPIO) {
+            wifi_button_ = new Button(WIFI_RESET_BUTTON_GPIO);
+            wifi_button_->OnClick([this]() {
+                ESP_LOGI(TAG, "KEY 4 pressed: Entering Wi-Fi Config Mode");
+                EnterWifiConfigMode();
+            });
+        }
 
-        vol_up_button_.OnClick([this]() {
+        vol_up_button_ = new Button(VOL_UP_BUTTON_GPIO);
+        vol_up_button_->OnClick([this]() {
             auto codec = GetAudioCodec();
             auto vol = codec->output_volume() + 10;
             if (vol > 100) vol = 100;
@@ -58,24 +126,21 @@ private:
             ESP_LOGI(TAG, "Volume set to %d%%", vol);
         });
 
-        vol_down_button_.OnClick([this]() {
-            auto codec = GetAudioCodec();
-            auto vol = codec->output_volume() - 10;
-            if (vol < 0) vol = 0;
-            codec->SetOutputVolume(vol);
-            ESP_LOGI(TAG, "Volume set to %d%%", vol);
-        });
+        if (scl_pin_ != VOL_DOWN_BUTTON_GPIO && sda_pin_ != VOL_DOWN_BUTTON_GPIO) {
+            vol_down_button_ = new Button(VOL_DOWN_BUTTON_GPIO);
+            vol_down_button_->OnClick([this]() {
+                auto codec = GetAudioCodec();
+                auto vol = codec->output_volume() - 10;
+                if (vol < 0) vol = 0;
+                codec->SetOutputVolume(vol);
+                ESP_LOGI(TAG, "Volume set to %d%%", vol);
+            });
+        }
     }
 
 public:
-    AudioKitBoard() : 
-        WifiBoard(),
-        talk_button_(TALK_BUTTON_GPIO),
-        wifi_button_(WIFI_RESET_BUTTON_GPIO),
-        vol_up_button_(VOL_UP_BUTTON_GPIO),
-        vol_down_button_(VOL_DOWN_BUTTON_GPIO) {
-        
-        ESP_LOGI(TAG, "Initializing Ai-Thinker ESP32-A1S Audio Kit (ES8388)...");
+    AudioKitBoard() : WifiBoard() {
+        ESP_LOGI(TAG, "Initializing Ai-Thinker ESP32-A1S Audio Kit...");
         InitializeI2c();
         InitializeButtons();
     }
@@ -97,7 +162,7 @@ public:
             AUDIO_I2S_GPIO_DOUT, 
             AUDIO_I2S_GPIO_DIN,
             AUDIO_CODEC_PA_PIN, 
-            AUDIO_CODEC_ES8388_ADDR
+            codec_addr_
         );
         return &audio_codec;
     }
