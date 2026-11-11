@@ -9,7 +9,7 @@
 
 #include <esp_log.h>
 #include <esp_console.h>
-#include <wifi_station.h>
+#include <wifi_manager.h>
 #include <esp_heap_caps.h>
 #include <esp_system.h>
 #include <driver/i2c_master.h>
@@ -294,7 +294,7 @@ private:
                 auto self = static_cast<AudioKitBoard*>(context);
                 auto& app = Application::GetInstance();
                 auto codec = self->GetAudioCodec();
-                auto& wifi = WifiStation::GetInstance();
+                auto& wifi = WifiManager::GetInstance();
 
                 const char* state_str = "Unknown";
                 switch (app.GetDeviceState()) {
