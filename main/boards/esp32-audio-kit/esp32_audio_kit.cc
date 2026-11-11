@@ -8,6 +8,10 @@
 #include "config.h"
 
 #include <esp_log.h>
+#include <esp_console.h>
+#include <wifi_station.h>
+#include <esp_heap_caps.h>
+#include <esp_system.h>
 #include <driver/i2c_master.h>
 #include <esp_codec_dev_defaults.h>
 
@@ -139,11 +143,235 @@ private:
         }
     }
 
+    void InitializeSerialConsole() {
+        esp_console_repl_t *repl = NULL;
+        esp_console_repl_config_t repl_config = ESP_CONSOLE_REPL_CONFIG_DEFAULT();
+        repl_config.max_cmdline_length = 256;
+        repl_config.prompt = "xiaozhi> ";
+
+        // 1. chat / c: Toggle chat state (talk via mic / stop / interrupt AI)
+        const esp_console_cmd_t cmd_chat = {
+            .command = "chat",
+            .help = "Bat/Tat tro chuyen (Noi qua mic / dung / ngat loi AI)",
+            .hint = nullptr,
+            .func = nullptr,
+            .argtable = nullptr,
+            .func_w_context = [](void* context, int argc, char** argv) -> int {
+                auto& app = Application::GetInstance();
+                if (app.GetDeviceState() == kDeviceStateStarting) {
+                    printf(">> Thiet bi dang khoi dong, vui long doi...\n");
+                    return 0;
+                }
+                app.ToggleChatState();
+                printf(">> Da Toggle Chat State! Hay noi qua Micro hoac go 'stop' de dung.\n");
+                return 0;
+            },
+            .context = this,
+        };
+        ESP_ERROR_CHECK(esp_console_cmd_register(&cmd_chat));
+
+        const esp_console_cmd_t cmd_c = {
+            .command = "c",
+            .help = "Phim tat cho 'chat'",
+            .hint = nullptr,
+            .func = nullptr,
+            .argtable = nullptr,
+            .func_w_context = cmd_chat.func_w_context,
+            .context = this,
+        };
+        ESP_ERROR_CHECK(esp_console_cmd_register(&cmd_c));
+
+        // 2. listen: Force start listening
+        const esp_console_cmd_t cmd_listen = {
+            .command = "listen",
+            .help = "Bat micro de lang nghe giong noi",
+            .hint = nullptr,
+            .func = nullptr,
+            .argtable = nullptr,
+            .func_w_context = [](void* context, int argc, char** argv) -> int {
+                Application::GetInstance().StartListening();
+                printf(">> Bat dau lang nghe...\n");
+                return 0;
+            },
+            .context = this,
+        };
+        ESP_ERROR_CHECK(esp_console_cmd_register(&cmd_listen));
+
+        // 3. stop / s: Stop listening or speaking
+        const esp_console_cmd_t cmd_stop = {
+            .command = "stop",
+            .help = "Dung lang nghe hoac ngat loi AI dang noi",
+            .hint = nullptr,
+            .func = nullptr,
+            .argtable = nullptr,
+            .func_w_context = [](void* context, int argc, char** argv) -> int {
+                auto& app = Application::GetInstance();
+                app.Schedule([&app]() {
+                    if (app.GetDeviceState() == kDeviceStateListening) {
+                        app.StopListening();
+                        printf(">> Da dung lang nghe.\n");
+                    } else if (app.GetDeviceState() == kDeviceStateSpeaking) {
+                        app.AbortSpeaking(kAbortReasonNone);
+                        printf(">> Da ngat loi AI.\n");
+                    } else {
+                        printf(">> Thiet bi dang o trang thai Standby (khong nghe/noi).\n");
+                    }
+                });
+                return 0;
+            },
+            .context = this,
+        };
+        ESP_ERROR_CHECK(esp_console_cmd_register(&cmd_stop));
+
+        const esp_console_cmd_t cmd_s = {
+            .command = "s",
+            .help = "Phim tat cho 'stop'",
+            .hint = nullptr,
+            .func = nullptr,
+            .argtable = nullptr,
+            .func_w_context = cmd_stop.func_w_context,
+            .context = this,
+        };
+        ESP_ERROR_CHECK(esp_console_cmd_register(&cmd_s));
+
+        // 4. volume / vol / v: Get or set volume
+        const esp_console_cmd_t cmd_volume = {
+            .command = "volume",
+            .help = "Xem hoac chinh am luong loa (0-100). Vi du: volume 80",
+            .hint = "[0-100]",
+            .func = nullptr,
+            .argtable = nullptr,
+            .func_w_context = [](void* context, int argc, char** argv) -> int {
+                auto self = static_cast<AudioKitBoard*>(context);
+                auto codec = self->GetAudioCodec();
+                if (argc < 2) {
+                    printf(">> Am luong hien tai: %d%%\n", codec ? codec->output_volume() : 0);
+                } else {
+                    int vol = atoi(argv[1]);
+                    if (vol < 0) vol = 0;
+                    if (vol > 100) vol = 100;
+                    if (codec) {
+                        codec->SetOutputVolume(vol);
+                        printf(">> Da cai dat am luong loa: %d%%\n", vol);
+                    }
+                }
+                return 0;
+            },
+            .context = this,
+        };
+        ESP_ERROR_CHECK(esp_console_cmd_register(&cmd_volume));
+
+        const esp_console_cmd_t cmd_vol = {
+            .command = "vol",
+            .help = "Phim tat cho 'volume'",
+            .hint = "[0-100]",
+            .func = nullptr,
+            .argtable = nullptr,
+            .func_w_context = cmd_volume.func_w_context,
+            .context = this,
+        };
+        ESP_ERROR_CHECK(esp_console_cmd_register(&cmd_vol));
+
+        const esp_console_cmd_t cmd_v = {
+            .command = "v",
+            .help = "Phim tat cho 'volume'",
+            .hint = "[0-100]",
+            .func = nullptr,
+            .argtable = nullptr,
+            .func_w_context = cmd_volume.func_w_context,
+            .context = this,
+        };
+        ESP_ERROR_CHECK(esp_console_cmd_register(&cmd_v));
+
+        // 5. status: Show diagnostics
+        const esp_console_cmd_t cmd_status = {
+            .command = "status",
+            .help = "Xem thong tin trang thai he thong (AI, Wi-Fi, IP, RAM)",
+            .hint = nullptr,
+            .func = nullptr,
+            .argtable = nullptr,
+            .func_w_context = [](void* context, int argc, char** argv) -> int {
+                auto self = static_cast<AudioKitBoard*>(context);
+                auto& app = Application::GetInstance();
+                auto codec = self->GetAudioCodec();
+                auto& wifi = WifiStation::GetInstance();
+
+                const char* state_str = "Unknown";
+                switch (app.GetDeviceState()) {
+                    case kDeviceStateUnknown: state_str = "Unknown"; break;
+                    case kDeviceStateStarting: state_str = "Starting"; break;
+                    case kDeviceStateWifiConfiguring: state_str = "WifiConfiguring"; break;
+                    case kDeviceStateIdle: state_str = "Idle (Standby - San sang)"; break;
+                    case kDeviceStateConnecting: state_str = "Connecting to server"; break;
+                    case kDeviceStateListening: state_str = "Listening (Micro dang thu am)"; break;
+                    case kDeviceStateSpeaking: state_str = "Speaking (AI dang tra loi qua loa)"; break;
+                    case kDeviceStateUpgrading: state_str = "Upgrading (OTA)"; break;
+                    case kDeviceStateActivating: state_str = "Activating"; break;
+                    case kDeviceStateAudioTesting: state_str = "AudioTesting"; break;
+                    default: break;
+                }
+
+                printf("\n=================== TRANG THAI XIAOZHI ESP32-A1S ===================\n");
+                printf(" Trang thai AI   : %s\n", state_str);
+                printf(" Audio Codec     : %s\n", self->is_ac101_ ? "AC101" : "ES8388");
+                printf(" Am luong loa    : %d%%\n", codec ? codec->output_volume() : 0);
+                printf(" Wi-Fi SSID      : %s (RSSI: %d dBm)\n", wifi.GetSsid().c_str(), wifi.GetRssi());
+                printf(" Dia chi IP Wi-Fi: %s\n", wifi.GetIpAddress().c_str());
+                printf(" Free Internal   : %u bytes\n", (unsigned int)heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
+                printf(" Free PSRAM      : %u bytes\n", (unsigned int)heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
+                printf("===================================================================\n\n");
+                return 0;
+            },
+            .context = this,
+        };
+        ESP_ERROR_CHECK(esp_console_cmd_register(&cmd_status));
+
+        // 6. wifi: Enter Wi-Fi config mode
+        const esp_console_cmd_t cmd_wifi = {
+            .command = "wifi",
+            .help = "Chuyen sang che do cau hinh Wi-Fi",
+            .hint = nullptr,
+            .func = nullptr,
+            .argtable = nullptr,
+            .func_w_context = [](void* context, int argc, char** argv) -> int {
+                auto self = static_cast<AudioKitBoard*>(context);
+                printf(">> Dang chuyen sang che do cau hinh Wi-Fi...\n");
+                self->EnterWifiConfigMode();
+                return 0;
+            },
+            .context = this,
+        };
+        ESP_ERROR_CHECK(esp_console_cmd_register(&cmd_wifi));
+
+        // 7. reboot: Restart device
+        const esp_console_cmd_t cmd_reboot = {
+            .command = "reboot",
+            .help = "Khoi dong lai thiet bi",
+            .hint = nullptr,
+            .func = nullptr,
+            .argtable = nullptr,
+            .func_w_context = [](void* context, int argc, char** argv) -> int {
+                printf(">> Dang khoi dong lai ESP32...\n");
+                esp_restart();
+                return 0;
+            },
+            .context = this,
+        };
+        ESP_ERROR_CHECK(esp_console_cmd_register(&cmd_reboot));
+
+        // Initialize UART REPL
+        esp_console_dev_uart_config_t hw_config = ESP_CONSOLE_DEV_UART_CONFIG_DEFAULT();
+        ESP_ERROR_CHECK(esp_console_new_repl_uart(&hw_config, &repl_config, &repl));
+        ESP_ERROR_CHECK(esp_console_start_repl(repl));
+        ESP_LOGI(TAG, "Serial Console REPL initialized successfully. Prompt: 'xiaozhi> '");
+    }
+
 public:
     AudioKitBoard() : WifiBoard() {
         ESP_LOGI(TAG, "Initializing Ai-Thinker ESP32-A1S Audio Kit...");
         InitializeI2c();
         InitializeButtons();
+        InitializeSerialConsole();
     }
 
     virtual Led* GetLed() override {
