@@ -149,28 +149,28 @@ private:
 
         if (cmd == "c" || cmd == "chat") {
             if (app.GetDeviceState() == kDeviceStateStarting) {
-                printf("\n[Serial] >> Thiet bi dang khoi dong, vui long doi...\n");
+                printf("[Serial] >> Thiet bi dang khoi dong, vui long doi...\r\n");
                 return;
             }
             app.ToggleChatState();
-            printf("\n[Serial] >> Da Toggle Chat! Hay noi vao Micro tren mach (hoac go 'stop' de dung).\n");
+            printf("[Serial] >> Da Toggle Chat! Hay noi vao Micro tren mach (hoac go 'stop' de dung).\r\n");
         } else if (cmd == "s" || cmd == "stop") {
             app.Schedule([&app]() {
                 if (app.GetDeviceState() == kDeviceStateListening) {
                     app.StopListening();
-                    printf("\n[Serial] >> Da dung lang nghe.\n");
+                    printf("[Serial] >> Da dung lang nghe.\r\n");
                 } else if (app.GetDeviceState() == kDeviceStateSpeaking) {
                     app.AbortSpeaking(kAbortReasonNone);
-                    printf("\n[Serial] >> Da ngat loi AI.\n");
+                    printf("[Serial] >> Da ngat loi AI.\r\n");
                 } else {
-                    printf("\n[Serial] >> Thiet bi dang o trang thai Standby (khong nghe/noi).\n");
+                    printf("[Serial] >> Thiet bi dang o trang thai Standby (khong nghe/noi).\r\n");
                 }
             });
         } else if (cmd == "listen") {
             app.StartListening();
-            printf("\n[Serial] >> Bat dau lang nghe qua Micro...\n");
+            printf("[Serial] >> Bat dau lang nghe qua Micro...\r\n");
         } else if (cmd == "vol" || cmd == "volume" || cmd == "v") {
-            printf("\n[Serial] >> Am luong hien tai: %d%%\n", codec ? codec->output_volume() : 0);
+            printf("[Serial] >> Am luong hien tai: %d%%\r\n", codec ? codec->output_volume() : 0);
         } else if (cmd.rfind("vol ", 0) == 0 || cmd.rfind("volume ", 0) == 0 || cmd.rfind("v ", 0) == 0) {
             size_t pos = cmd.find(' ');
             int vol = atoi(cmd.substr(pos + 1).c_str());
@@ -178,7 +178,7 @@ private:
             if (vol > 100) vol = 100;
             if (codec) {
                 codec->SetOutputVolume(vol);
-                printf("\n[Serial] >> Da cai dat am luong loa: %d%%\n", vol);
+                printf("[Serial] >> Da cai dat am luong loa: %d%%\r\n", vol);
             }
         } else if (cmd == "status" || cmd == "info") {
             auto& wifi = WifiManager::GetInstance();
@@ -197,36 +197,37 @@ private:
                 default: break;
             }
 
-            printf("\n=================== TRANG THAI XIAOZHI ESP32-A1S ===================\n");
-            printf(" Trang thai AI   : %s\n", state_str);
-            printf(" Audio Codec     : %s\n", is_ac101_ ? "AC101" : "ES8388");
-            printf(" Am luong loa    : %d%%\n", codec ? codec->output_volume() : 0);
-            printf(" Wi-Fi SSID      : %s (RSSI: %d dBm)\n", wifi.GetSsid().c_str(), wifi.GetRssi());
-            printf(" Dia chi IP Wi-Fi: %s\n", wifi.GetIpAddress().c_str());
-            printf(" Free Internal   : %u bytes\n", (unsigned int)heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
-            printf(" Free PSRAM      : %u bytes\n", (unsigned int)heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
-            printf("===================================================================\n\n");
+            printf("\r\n=================== TRANG THAI XIAOZHI ESP32-A1S ===================\r\n");
+            printf(" Trang thai AI   : %s\r\n", state_str);
+            printf(" Audio Codec     : %s\r\n", is_ac101_ ? "AC101" : "ES8388");
+            printf(" Am luong loa    : %d%%\r\n", codec ? codec->output_volume() : 0);
+            printf(" Wi-Fi SSID      : %s (RSSI: %d dBm)\r\n", wifi.GetSsid().c_str(), wifi.GetRssi());
+            printf(" Dia chi IP Wi-Fi: %s\r\n", wifi.GetIpAddress().c_str());
+            printf(" Free Internal   : %u bytes\r\n", (unsigned int)heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
+            printf(" Free PSRAM      : %u bytes\r\n", (unsigned int)heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
+            printf("===================================================================\r\n\r\n");
         } else if (cmd == "wifi") {
-            printf("\n[Serial] >> Dang chuyen sang che do cau hinh Wi-Fi (AP Xiaozhi)...\n");
+            printf("[Serial] >> Dang chuyen sang che do cau hinh Wi-Fi (AP Xiaozhi)...\r\n");
             EnterWifiConfigMode();
         } else if (cmd == "reboot" || cmd == "restart") {
-            printf("\n[Serial] >> Dang khoi dong lai ESP32...\n");
+            printf("[Serial] >> Dang khoi dong lai ESP32...\r\n");
             vTaskDelay(pdMS_TO_TICKS(200));
             esp_restart();
         } else if (cmd == "help" || cmd == "?") {
-            printf("\n=================== DANH SACH LENH SERIAL CLI ===================\n");
-            printf("  c, chat        : Bat/Tat tro chuyen (Noi qua mic / dung / ngat loi AI)\n");
-            printf("  listen         : Bat micro de lang nghe\n");
-            printf("  s, stop        : Dung lang nghe hoac ngat loi AI dang noi\n");
-            printf("  v, vol [0-100] : Xem hoac chinh am luong loa (vi du: vol 80)\n");
-            printf("  status         : Xem thong tin he thong (AI, Wi-Fi, IP, RAM)\n");
-            printf("  wifi           : Chuyen sang che do cau hinh Wi-Fi\n");
-            printf("  reboot         : Khoi dong lai thiet bi\n");
-            printf("  help, ?        : Xem menu tro giup nay\n");
-            printf("=================================================================\n\n");
+            printf("\r\n=================== DANH SACH LENH SERIAL CLI ===================\r\n");
+            printf("  c, chat        : Bat/Tat tro chuyen (Noi qua mic / dung / ngat loi AI)\r\n");
+            printf("  [Phim Space]   : Phim tat nhanh de Bat/Tat tro chuyen\r\n");
+            printf("  listen         : Bat micro de lang nghe\r\n");
+            printf("  s, stop        : Dung lang nghe hoac ngat loi AI dang noi\r\n");
+            printf("  v, vol [0-100] : Xem hoac chinh am luong loa (vi du: vol 80)\r\n");
+            printf("  status         : Xem thong tin he thong (AI, Wi-Fi, IP, RAM)\r\n");
+            printf("  wifi           : Chuyen sang che do cau hinh Wi-Fi\r\n");
+            printf("  reboot         : Khoi dong lai thiet bi\r\n");
+            printf("  help, ?        : Xem menu tro giup nay\r\n");
+            printf("=================================================================\r\n\r\n");
         } else {
-            printf("\n[Serial] Khong nhan dien duoc lenh: '%s'\n", cmd.c_str());
-            printf("[Serial] Go 'help' de xem danh sach lenh, hoac go 'c' de bat dau noi chuyen qua Micro!\n\n");
+            printf("[Serial] Khong nhan dien duoc lenh: '%s'\r\n", cmd.c_str());
+            printf("[Serial] Go 'help' de xem danh sach lenh, hoac go 'c' (hoac phim Space) de tro chuyen!\r\n\r\n");
         }
     }
 
@@ -246,12 +247,22 @@ private:
             auto self = static_cast<AudioKitBoard*>(arg);
             uint8_t ch;
             std::string line;
+            bool last_was_cr = false;
 
             while (true) {
                 int len = uart_read_bytes(UART_NUM_0, &ch, 1, pdMS_TO_TICKS(100));
                 if (len > 0) {
-                    if (ch == '\r' || ch == '\n') {
-                        // Trim leading/trailing whitespace
+                    // Spacebar instant shortcut when line is empty
+                    if (ch == ' ' && line.empty()) {
+                        last_was_cr = false;
+                        self->HandleSerialCommand("c");
+                        continue;
+                    }
+
+                    if (ch == '\r') {
+                        last_was_cr = true;
+                        uart_write_bytes(UART_NUM_0, "\r\n", 2);
+
                         while (!line.empty() && (line.front() == ' ' || line.front() == '\t')) {
                             line.erase(line.begin());
                         }
@@ -259,17 +270,45 @@ private:
                             line.pop_back();
                         }
 
-                        if (!line.empty()) {
+                        if (line.empty()) {
+                            printf("[Serial] San sang. Go 'c' (hoac bam Space) de noi chuyen, go 'help' de xem lenh.\r\n");
+                        } else {
                             self->HandleSerialCommand(line);
                             line.clear();
                         }
-                    } else if (ch >= 32 && ch <= 126) {
-                        if (line.size() < 128) {
-                            line += (char)ch;
+                    } else if (ch == '\n') {
+                        if (last_was_cr) {
+                            last_was_cr = false;
+                            continue; // Skip \n right after \r
                         }
-                    } else if (ch == '\b' || ch == 127) {
-                        if (!line.empty()) {
+                        uart_write_bytes(UART_NUM_0, "\r\n", 2);
+
+                        while (!line.empty() && (line.front() == ' ' || line.front() == '\t')) {
+                            line.erase(line.begin());
+                        }
+                        while (!line.empty() && (line.back() == ' ' || line.back() == '\t')) {
                             line.pop_back();
+                        }
+
+                        if (line.empty()) {
+                            printf("[Serial] San sang. Go 'c' (hoac bam Space) de noi chuyen, go 'help' de xem lenh.\r\n");
+                        } else {
+                            self->HandleSerialCommand(line);
+                            line.clear();
+                        }
+                    } else {
+                        last_was_cr = false;
+                        if (ch >= 32 && ch <= 126) {
+                            if (line.size() < 128) {
+                                line += (char)ch;
+                                // Echo character back so PuTTY displays what user types!
+                                uart_write_bytes(UART_NUM_0, &ch, 1);
+                            }
+                        } else if (ch == '\b' || ch == 127) {
+                            if (!line.empty()) {
+                                line.pop_back();
+                                uart_write_bytes(UART_NUM_0, "\b \b", 3);
+                            }
                         }
                     }
                 }
